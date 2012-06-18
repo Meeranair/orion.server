@@ -143,6 +143,45 @@ public class HostingTest extends CoreSiteTest {
 	}
 
 	@Test
+	public void testDisallowedSiteAccess() throws SAXException, IOException, JSONException, URISyntaxException {
+		// Create file in workspace
+		final String filename = "foo.html";
+		final String fileContent = "<html><body>This is a test file</body></html>";
+		createFileOnServer(filename, fileContent);
+
+		// Create a site that exposes the workspace file
+		final String siteName = "My hosted site";
+		final String filePath = "/" + filename;
+		final String mountAt = "/file.html";
+
+		final JSONArray mappings = makeMappings(new String[][] {{mountAt, filePath}});
+		WebRequest createSiteReq = getCreateSiteRequest(siteName, workspaceId, mappings, null);
+		WebResponse createSiteResp = webConversation.getResponse(createSiteReq);
+		assertEquals(HttpURLConnection.HTTP_CREATED, createSiteResp.getResponseCode());
+		JSONObject siteObject = new JSONObject(createSiteResp.getText());
+
+		// Start the site
+		final String siteLocation = siteObject.getString(ProtocolConstants.KEY_LOCATION);//createSiteResp.getHeaderField("Location");
+		siteObject = startSite(siteLocation);
+
+		final JSONObject hostingStatus = siteObject.getJSONObject(SiteConfigurationConstants.KEY_HOSTING_STATUS);
+		final String hostedURL = hostingStatus.getString(SiteConfigurationConstants.KEY_HOSTING_STATUS_URL);
+
+		// Access the workspace file through the site
+		WebRequest getFileReq = new GetMethodWebRequest(hostedURL + mountAt);
+		WebResponse getFileResp = webConversation.getResponse(getFileReq);
+		assertEquals(fileContent, getFileResp.getText());
+
+		// Stop the site
+		stopSite(siteLocation);
+
+		// Check that the workspace file can't be accessed anymore
+		WebRequest getFile404Req = new GetMethodWebRequest(hostedURL + mountAt);
+		WebResponse getFile404Resp = webConversation.getResponse(getFile404Req);
+		assertEquals(HttpURLConnection.HTTP_NOT_FOUND, getFile404Resp.getResponseCode());
+	}
+
+	@Test
 	public void testRemoteProxyRequest() throws SAXException, IOException, JSONException, URISyntaxException {
 		// Create a site that just points back to the Orion server being tested (mini self-host)
 		final String siteName = "My remote hosting site";
