@@ -91,7 +91,17 @@ public class DirectoryHandlerV1 extends ServletResourceHandler<IFileStore> {
 			return statusHandler.handleRequest(request, response, new ServerStatus(IStatus.ERROR, HttpServletResponse.SC_BAD_REQUEST, "File name not specified.", null));
 		int options = getCreateOptions(request);
 		IFileStore toCreate = dir.getChild(name);
-		boolean destinationExists = toCreate.fetchInfo().exists();
+
+		//Fix for Bug 373989 - Can't use Rename to change letter cases
+		IFileInfo fileFound = toCreate.fetchInfo();
+
+		boolean isNameEqualCaseInsensitive = true;
+		if (options == (CREATE_MOVE | CREATE_NO_OVERWRITE)) {
+			isNameEqualCaseInsensitive = fileFound.getName().equals(name);
+		}
+		boolean destinationExists = (fileFound.exists() && isNameEqualCaseInsensitive);
+		//End fix for Bug 373989
+
 		if (!validateOptions(request, response, toCreate, destinationExists, options))
 			return true;
 		//perform the operation
